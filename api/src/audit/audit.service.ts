@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { createHash } from 'crypto';
-import { AuditRecord } from './interfaces/audit.interface';
+import { createHash, randomUUID } from 'crypto';
+import { stableStringify } from './audit.canonical';
+import { AuditRecord } from './audit.interface';
 import {
   AuditChainStep,
   AuditWrite,
@@ -8,7 +9,7 @@ import {
 } from './classes/audit.classes';
 
 export class AuditChainState {
-  lastHash: string = null;
+  lastHash: string | null = null;
   lastSequence = 0;
   entries: AuditRecord[] = [];
   expired = 0;
@@ -18,8 +19,8 @@ export class VerificationFailure {
   ok: false;
   failedIndex: number;
   reason: string;
-  expected: string;
-  actual: string;
+  expected: string | null;
+  actual: string | null;
 }
 
 export class VerificationReport {
@@ -90,13 +91,14 @@ export class AuditService {
     const key = this.entityKey(write.entityType, write.entityId);
     const state = this.getOrCreateChain(key);
 
-    if (state.entries.length >= MAX_ENTRIES_PER_ENTITY) {
-      this.dropOldest(key);
-    }
-    if (this.totalEntries >= MAX_TOTAL_ENTRIES) {
+    // At either cap the write is refused, never made room for: dropping the
+    // oldest entry would rewrite an append-only, hash-chained history.
+    const atEntityCap = state.entries.length >= MAX_ENTRIES_PER_ENTITY;
+    if (atEntityCap || this.totalEntries >= MAX_TOTAL_ENTRIES) {
       this.droppedWrites++;
+      const cap = atEntityCap ? MAX_ENTRIES_PER_ENTITY : MAX_TOTAL_ENTRIES;
       this.logger.warn(
-        `audit chain at capacity (${MAX_TOTAL_ENTRIES} entries); dropping write for ${key}`,
+        `audit chain at capacity (${cap} entries); dropping write for ${key}`,
       );
       const fail = new AuditWriteResult();
       fail.kind = 'rejected';
@@ -107,7 +109,7 @@ export class AuditService {
 
     const entry: AuditRecord = {
       sequence: state.lastSequence + 1,
-      recordId: write.entityType ? randomUUID() : randomUUID(),
+      recordId: randomUUID(),
       entityType: write.entityType,
       entityId: write.entityId,
       action: write.action,
@@ -150,7 +152,7 @@ export class AuditService {
     report.checkedEntries = entries.length;
     report.started = entries.length ? 1 : 0;
 
-    let previousHash: string = null;
+    let previousHash: string | null = null;
     for (let i = 0; i < entries.length; i++) {
       const entry = entries[i];
 
@@ -220,8 +222,8 @@ export class AuditService {
     report: VerificationReport,
     index: number,
     reason: string,
-    expected: string,
-    actual: string,
+    expected: string | null,
+    actual: string | null,
   ): void {
     const failure = new VerificationFailure();
     failure.ok = false;
@@ -243,16 +245,6 @@ export class AuditService {
 
   private entityKey(entityType: string, entityId: string): string {
     return `${entityType}:${entityId}`;
-  }
-
-  private dropOldest(key: string): void {
-    const state = this.chains.get(key);
-    if (!state) return;
-    state.entries.shift();
-    state.lastSequence = state.entries.length;
-    state.lastHash = state.entries.length ? state.entries[state.entries.length - 1].hash : null;
-    this.totalEntries--;
-    this.totalExpired++;
   }
 
   /**

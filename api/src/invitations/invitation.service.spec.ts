@@ -46,7 +46,7 @@ describe('InvitationService (#265)', () => {
 
     it('rejects inviting with a role at or above the inviter rank', () => {
       expect(() => invite({ role: 'issuer_admin' })).toThrowError(
-        expect.objectContaining<InvitationError>({
+        expect.objectContaining<Partial<InvitationError>>({
           code: 'role_escalation_rejected',
         }),
       );
@@ -54,7 +54,7 @@ describe('InvitationService (#265)', () => {
 
     it('rejects creation by a wallet holding no role in the scope', () => {
       expect(() => invite({ inviterAddress: OUTSIDER })).toThrowError(
-        expect.objectContaining<InvitationError>({ code: 'role_escalation_rejected' }),
+        expect.objectContaining<Partial<InvitationError>>({ code: 'role_escalation_rejected' }),
       );
     });
 
@@ -62,7 +62,7 @@ describe('InvitationService (#265)', () => {
       service.grantRole(MANAGER, SCOPE, INVITEE, 'contributor', NOW);
 
       expect(() => invite()).toThrowError(
-        expect.objectContaining<InvitationError>({ code: 'already_a_collaborator' }),
+        expect.objectContaining<Partial<InvitationError>>({ code: 'already_a_collaborator' }),
       );
     });
   });
@@ -81,7 +81,7 @@ describe('InvitationService (#265)', () => {
       const invitation = invite();
 
       expect(() => service.accept(invitation.id, OUTSIDER, NOW)).toThrowError(
-        expect.objectContaining<InvitationError>({ code: 'invitation_not_pending' }),
+        expect.objectContaining<Partial<InvitationError>>({ code: 'invitation_not_pending' }),
       );
     });
 
@@ -89,7 +89,7 @@ describe('InvitationService (#265)', () => {
       const invitation = invite({ ttlMs: HOUR });
 
       expect(() => service.accept(invitation.id, INVITEE, NOW + HOUR + 1)).toThrowError(
-        expect.objectContaining<InvitationError>({ code: 'invitation_expired' }),
+        expect.objectContaining<Partial<InvitationError>>({ code: 'invitation_expired' }),
       );
       expect(service.get(invitation.id, NOW + HOUR + 1).status).toBe('expired');
       expect(service.rankOf(INVITEE, SCOPE)).toBe(-1);
@@ -103,7 +103,7 @@ describe('InvitationService (#265)', () => {
 
       expect(revoked.status).toBe('revoked');
       expect(() => service.accept(invitation.id, INVITEE, NOW + 2_000)).toThrowError(
-        expect.objectContaining<InvitationError>({ code: 'invitation_revoked' }),
+        expect.objectContaining<Partial<InvitationError>>({ code: 'invitation_revoked' }),
       );
       expect(service.rankOf(INVITEE, SCOPE)).toBe(-1);
     });
@@ -118,7 +118,7 @@ describe('InvitationService (#265)', () => {
       const invitation = invite();
 
       expect(() => service.revoke(invitation.id, OUTSIDER, NOW + 1_000)).toThrowError(
-        expect.objectContaining<InvitationError>({ code: 'role_escalation_rejected' }),
+        expect.objectContaining<Partial<InvitationError>>({ code: 'role_escalation_rejected' }),
       );
     });
   });
@@ -130,7 +130,7 @@ describe('InvitationService (#265)', () => {
       }
 
       expect(() => invite({ inviteeAddress: 'GINVITEE6' }, NOW + 6)).toThrowError(
-        expect.objectContaining<InvitationError>({ code: 'rate_limited' }),
+        expect.objectContaining<Partial<InvitationError>>({ code: 'rate_limited' }),
       );
     });
 

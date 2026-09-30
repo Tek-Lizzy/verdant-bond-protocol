@@ -29,11 +29,11 @@ describe('AuditService (#260)', () => {
       );
 
       expect(result.kind).toBe('recorded');
-      expect(result.record.entityType).toBe('Bond');
-      expect(result.record.before).toEqual({ status: 'active' });
-      expect(result.record.after).toEqual({ status: 'matured' });
-      expect(result.record.reason).toBe('maturity reached');
-      expect(result.record.sequence).toBe(1);
+      expect(result.record!.entityType).toBe('Bond');
+      expect(result.record!.before).toEqual({ status: 'active' });
+      expect(result.record!.after).toEqual({ status: 'matured' });
+      expect(result.record!.reason).toBe('maturity reached');
+      expect(result.record!.sequence).toBe(1);
     });
 
     it('rejects a write with no actor', async () => {

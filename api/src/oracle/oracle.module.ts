@@ -10,6 +10,7 @@ import { GracePeriodService } from './grace-period.service';
 import { VerraProvider } from './providers/verra.provider';
 import { SatelliteProvider } from './providers/satellite.provider';
 import { BlueCarbonProvider } from './providers/blue-carbon.provider';
+import { IotProvider } from './providers/iot.provider';
 
 @Module({
   imports: [ScheduleModule.forRoot(), ProjectsModule],
@@ -23,6 +24,7 @@ import { BlueCarbonProvider } from './providers/blue-carbon.provider';
     VerraProvider,
     SatelliteProvider,
     BlueCarbonProvider,
+    IotProvider,
   ],
   exports: [OracleService, OracleMonitoringService, OracleIncidentRepository],
 })

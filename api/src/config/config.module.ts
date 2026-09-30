@@ -1,10 +1,11 @@
 import { Global, Module } from '@nestjs/common';
 import { ConfigService } from './config.service';
 import { FeatureFlagsService } from './feature-flags.service';
+import { EnvConfigValidator } from '../common/config/env-config.validator';
 
 @Global()
 @Module({
-  providers: [ConfigService, FeatureFlagsService],
-  exports: [ConfigService, FeatureFlagsService],
+  providers: [ConfigService, EnvConfigValidator, FeatureFlagsService],
+  exports: [ConfigService, EnvConfigValidator, FeatureFlagsService],
 })
 export class ConfigModule {}

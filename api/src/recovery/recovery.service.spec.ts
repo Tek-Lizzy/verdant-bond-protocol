@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { NotificationsService } from '../notifications/notifications.service';
 import { RecoveryService } from './recovery.service';
 import { RecoveryOperationStatus, RecoveryStepDefinition } from './recovery.interface';
 
@@ -7,13 +8,13 @@ describe('RecoveryService (#261)', () => {
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      providers: [RecoveryService],
+      providers: [RecoveryService, NotificationsService],
     }).compile();
     service = module.get<RecoveryService>(RecoveryService);
   });
 
   /** Build steps whose invocations are observable and countable. */
-  const steps = (effects: { applied: string[] }, overrides: Partial<RecoveryStepDefinition>[] = []): RecoveryStepDefinition[] => {
+  const buildSteps = (effects: { applied: string[] }, overrides: Partial<RecoveryStepDefinition>[] = []): RecoveryStepDefinition[] => {
     const make = (id: string, i: number): RecoveryStepDefinition => ({
       id,
       userAction: `retry ${id}`,
@@ -31,7 +32,7 @@ describe('RecoveryService (#261)', () => {
   describe('deterministic resume', () => {
     it('runs every step and completes when nothing interrupts', async () => {
       const effects: { applied: string[] } = { applied: [] };
-      const steps = steps(effects);
+      const steps = buildSteps(effects);
 
       const operation = await service.start('bond_subscription', steps);
       const resumed = await service.resume(operation.operationId);
@@ -43,9 +44,12 @@ describe('RecoveryService (#261)', () => {
 
     it('resumes from the last checkpoint without re-running completed steps', async () => {
       const effects: { applied: string[] } = { applied: [] };
-      const failOnNotify = steps(effects);
-      failOnNotify[2].run = async () => {
-        throw new Error('webhook timed out');
+      const failOnNotify = buildSteps(effects);
+      // `start` copies the steps, so the step itself reads the flag.
+      let notifyBroken = true;
+      failOnNotify[2].run = async (state) => {
+        if (notifyBroken) throw new Error('webhook timed out');
+        return { ...state, notifyDone: true };
       };
 
       const operation = await service.start('bond_subscription', failOnNotify);
@@ -59,7 +63,7 @@ describe('RecoveryService (#261)', () => {
       ]);
 
       // Un-break the final step and resume.
-      failOnNotify[2].run = async (state) => ({ ...state, notifyDone: true });
+      notifyBroken = false;
       const resumed = await service.resume(operation.operationId);
 
       expect(resumed.status).toBe(RecoveryOperationStatus.COMPLETED);
@@ -74,7 +78,7 @@ describe('RecoveryService (#261)', () => {
 
     it('never re-applies an external side effect that already happened', async () => {
       const effects: { applied: string[] } = { applied: [] };
-      const steps = steps(effects);
+      const steps = buildSteps(effects);
 
       // The side effect already landed (wallet signed, chain accepted,
       // process died before the checkpoint): sideEffectsApplied reports it.
@@ -98,7 +102,7 @@ describe('RecoveryService (#261)', () => {
 
     it('re-runs a side-effect step when the side effect did NOT land', async () => {
       const effects: { applied: string[] } = { applied: [] };
-      const steps = steps(effects);
+      const steps = buildSteps(effects);
       let submitRuns = 0;
       steps[1].run = async (state) => {
         submitRuns++;
@@ -115,7 +119,7 @@ describe('RecoveryService (#261)', () => {
   describe('interruption before, during, and after external side effects', () => {
     it('interrupts before the side effect and resumes cleanly', async () => {
       const effects: { applied: string[] } = { applied: [] };
-      const steps = steps(effects);
+      const steps = buildSteps(effects);
       steps[0].run = async () => {
         throw new Error('wallet rejected');
       };
@@ -131,7 +135,7 @@ describe('RecoveryService (#261)', () => {
 
     it('interrupts during the side effect and lets sideEffectsApplied arbitrate', async () => {
       const effects: { applied: string[] } = { applied: [] };
-      const steps = steps(effects);
+      const steps = buildSteps(effects);
       steps[1].run = async () => {
         throw new Error('connection reset mid-submission');
       };
@@ -152,9 +156,11 @@ describe('RecoveryService (#261)', () => {
 
     it('records the interruption after the side effect and resumes from there', async () => {
       const effects: { applied: string[] } = { applied: [] };
-      const steps = steps(effects);
-      steps[2].run = async () => {
-        throw new Error('notify failed');
+      const steps = buildSteps(effects);
+      let notifyBroken = true;
+      steps[2].run = async (state) => {
+        if (notifyBroken) throw new Error('notify failed');
+        return { ...state, notifyDone: true };
       };
 
       const operation = await service.start('bond_subscription', steps);
@@ -164,7 +170,7 @@ describe('RecoveryService (#261)', () => {
       expect(last.stepId).toBe('notify');
       expect(last.stepIndex).toBe(2);
 
-      steps[2].run = async (state) => ({ ...state, notifyDone: true });
+      notifyBroken = false;
       const resumed = await service.resume(operation.operationId);
       expect(resumed.status).toBe(RecoveryOperationStatus.COMPLETED);
     });
@@ -173,7 +179,7 @@ describe('RecoveryService (#261)', () => {
   describe('user-visible recovery actions', () => {
     it('surfaces a next step for every interruption', async () => {
       const effects: { applied: string[] } = { applied: [] };
-      const steps = steps(effects);
+      const steps = buildSteps(effects);
       steps[1].run = async () => {
         throw new Error('on-chain rejected');
       };
@@ -190,7 +196,7 @@ describe('RecoveryService (#261)', () => {
 
     it('returns no actions for an operation that never interrupted', async () => {
       const effects: { applied: string[] } = { applied: [] };
-      const operation = await service.start('bond_subscription', steps(effects));
+      const operation = await service.start('bond_subscription', buildSteps(effects));
       await service.resume(operation.operationId);
 
       expect(service.getUserActions(operation.operationId)).toHaveLength(0);
@@ -200,7 +206,7 @@ describe('RecoveryService (#261)', () => {
   describe('maintainer diagnostics', () => {
     it('lists stuck operations with interruption duration and attempts', async () => {
       const effects: { applied: string[] } = { applied: [] };
-      const steps = steps(effects);
+      const steps = buildSteps(effects);
       steps[0].run = async () => {
         throw new Error('stuck');
       };
@@ -214,17 +220,17 @@ describe('RecoveryService (#261)', () => {
       const entry = diagnostics.find((d) => d.operationId === operation.operationId);
 
       expect(entry).toBeDefined();
-      expect(entry.resumeAttempts).toBe(3);
-      expect(entry.stepId).toBe('reserve');
-      expect(entry.interruptedForMs).toBeGreaterThanOrEqual(0);
+      expect(entry!.resumeAttempts).toBe(3);
+      expect(entry!.stepId).toBe('reserve');
+      expect(entry!.interruptedForMs).toBeGreaterThanOrEqual(0);
     });
 
     it('marks abandoned only operations older than the threshold and not completed', async () => {
       const effects: { applied: string[] } = { applied: [] };
-      const good = await service.start('bond_subscription', steps(effects));
+      const good = await service.start('bond_subscription', buildSteps(effects));
       await service.resume(good.operationId); // completes
 
-      const steps2 = steps(effects);
+      const steps2 = buildSteps(effects);
       steps2[0].run = async () => {
         throw new Error('boom');
       };
@@ -239,7 +245,7 @@ describe('RecoveryService (#261)', () => {
       expect(await service.markAbandoned(stuck.operationId, 0, Date.now() + 1000)).toBe(true);
 
       const after = service.getOperation(stuck.operationId);
-      expect(after.status).toBe(RecoveryOperationStatus.ABANDONED);
+      expect(after!.status).toBe(RecoveryOperationStatus.ABANDONED);
       expect(service.getUserActions(stuck.operationId)[0].status).toBe(RecoveryOperationStatus.INTERRUPTED);
     });
   });
@@ -251,7 +257,7 @@ describe('RecoveryService (#261)', () => {
 
     it('rejects duplicate step ids', async () => {
       const effects: { applied: string[] } = { applied: [] };
-      const dup = steps(effects);
+      const dup = buildSteps(effects);
       dup[1].id = 'reserve';
       await expect(service.start('bond_subscription', dup)).rejects.toThrow('unique');
     });
@@ -262,7 +268,7 @@ describe('RecoveryService (#261)', () => {
 
     it('refuses to resume an abandoned operation', async () => {
       const effects: { applied: string[] } = { applied: [] };
-      const steps2 = steps(effects);
+      const steps2 = buildSteps(effects);
       steps2[0].run = async () => {
         throw new Error('boom');
       };
@@ -277,7 +283,7 @@ describe('RecoveryService (#261)', () => {
   describe('audit events', () => {
     it('records interrupted, resumed, and completed transitions', async () => {
       const effects: { applied: string[] } = { applied: [] };
-      const steps2 = steps(effects);
+      const steps2 = buildSteps(effects);
       steps2[1].run = async () => {
         throw new Error('x');
       };

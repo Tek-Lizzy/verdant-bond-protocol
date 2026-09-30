@@ -70,7 +70,7 @@ describe('RedemptionService', () => {
       const underperformingResult = await service.evaluateEarlyRedemption({
         ...baseRequest,
         performanceData: {
-          ...baseRequest.performanceData,
+          ...baseRequest.performanceData!,
           trailingAverageScore: -20,
         },
       });
@@ -78,7 +78,7 @@ describe('RedemptionService', () => {
       const performingResult = await service.evaluateEarlyRedemption({
         ...baseRequest,
         performanceData: {
-          ...baseRequest.performanceData,
+          ...baseRequest.performanceData!,
           trailingAverageScore: 20,
         },
       });
@@ -89,21 +89,16 @@ describe('RedemptionService', () => {
     });
 
     it('should apply timing penalty for early redemption', async () => {
-      const earlyResult = await service.evaluateEarlyRedemption({
-        ...baseRequest,
-        performanceData: {
-          ...baseRequest.performanceData,
-          timeToMaturity: 30,
-        },
+      // Timing comes from the bond's own maturity date, never from the request.
+      const maturingIn = (days: number) => ({
+        ...mockBond,
+        maturityDate: Math.floor(Date.now() / 1000) + days * 24 * 60 * 60,
       });
+      (bondsService.findOne as jest.Mock).mockResolvedValueOnce(maturingIn(30));
+      const earlyResult = await service.evaluateEarlyRedemption(baseRequest);
 
-      const lateResult = await service.evaluateEarlyRedemption({
-        ...baseRequest,
-        performanceData: {
-          ...baseRequest.performanceData,
-          timeToMaturity: 180,
-        },
-      });
+      (bondsService.findOne as jest.Mock).mockResolvedValueOnce(maturingIn(180));
+      const lateResult = await service.evaluateEarlyRedemption(baseRequest);
 
       expect(BigInt(earlyResult.penaltyAmount)).toBeGreaterThan(BigInt(lateResult.penaltyAmount));
     });

@@ -1,8 +1,7 @@
 import { Controller, Post, Get, Body, Param, UseGuards } from '@nestjs/common';
-import { AuditService } from '../audit.service';
-import { AuditWrite } from '../classes/audit.classes';
-import { AuditWriteResult, VerificationReport } from '../classes/audit.classes';
-import { AuditRecord } from '../interfaces/audit.interface';
+import { AuditService, VerificationReport } from '../audit.service';
+import { AuditWrite, AuditWriteResult } from '../classes/audit.classes';
+import { AuditRecord } from '../audit.interface';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { AdminGuard } from '../../common/guards/admin.guard';
 

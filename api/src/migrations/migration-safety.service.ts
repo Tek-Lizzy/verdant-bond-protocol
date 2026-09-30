@@ -107,7 +107,9 @@ export class MigrationSafetyService {
     }
 
     // ── 3. post-checks ──────────────────────────────────────────────────────
-    const postCheckPhase: MigrationPhaseReport = {
+    const postCheckPhase: MigrationPhaseReport & {
+      postCheckResults: NonNullable<MigrationPhaseReport['postCheckResults']>;
+    } = {
       phase: 'post-check',
       startedAt: new Date().toISOString(),
       ok: true,
@@ -138,7 +140,9 @@ export class MigrationSafetyService {
 
   /** Every recorded run, newest first — the audit trail for migrations. */
   getHistory(): MigrationRecord[] {
-    return [...this.history].sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+    // Reversed first so runs started in the same millisecond keep newest-first
+    // order under the stable sort.
+    return [...this.history].reverse().sort((a, b) => b.startedAt.localeCompare(a.startedAt));
   }
 
   getRegisteredIds(): string[] {

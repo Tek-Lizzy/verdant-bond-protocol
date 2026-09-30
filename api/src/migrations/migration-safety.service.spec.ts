@@ -47,8 +47,8 @@ describe('MigrationSafetyService (#263)', () => {
       expect(report.dryRunOnly).toBe(true);
       expect(report.phases).toHaveLength(1);
       expect(report.phases[0].phase).toBe('dry-run');
-      expect(report.phases[0].affected).toHaveLength(1);
-      expect(report.phases[0].affected[0].estimate).toBe(1200);
+      expect(report.phases[0].affected!).toHaveLength(1);
+      expect(report.phases[0].affected![0].estimate).toBe(1200);
       expect(writes).toHaveLength(0); // nothing applied
     });
 
@@ -60,8 +60,8 @@ describe('MigrationSafetyService (#263)', () => {
 
       expect(report.ok).toBe(true);
       const dryRun = report.phases.find((p) => p.phase === 'dry-run');
-      expect(dryRun.ok).toBe(true);
-      expect(dryRun.affected).toHaveLength(1);
+      expect(dryRun!.ok).toBe(true);
+      expect(dryRun!.affected).toHaveLength(1);
       expect(writes).toEqual(['applied']);
     });
   });
@@ -81,10 +81,10 @@ describe('MigrationSafetyService (#263)', () => {
 
       expect(report.ok).toBe(false);
       const postChecks = report.phases.find((p) => p.phase === 'post-check');
-      expect(postChecks.ok).toBe(false);
-      const indexCheck = postChecks.postCheckResults.find((r) => r.name === 'index_exists');
-      expect(indexCheck.passed).toBe(false);
-      expect(indexCheck.detail).toContain('index missing');
+      expect(postChecks!.ok).toBe(false);
+      const indexCheck = postChecks!.postCheckResults!.find((r) => r.name === 'index_exists');
+      expect(indexCheck!.passed).toBe(false);
+      expect(indexCheck!.detail).toContain('index missing');
     });
 
     it('runs every post-check even when an earlier one failed', async () => {
@@ -99,9 +99,9 @@ describe('MigrationSafetyService (#263)', () => {
       const report = await service.run('add_bond_secondary_index', { dryRun: false });
 
       const postChecks = report.phases.find((p) => p.phase === 'post-check');
-      expect(postChecks.postCheckResults).toHaveLength(2);
-      expect(postChecks.postCheckResults[0].passed).toBe(false);
-      expect(postChecks.postCheckResults[1].passed).toBe(true);
+      expect(postChecks!.postCheckResults!).toHaveLength(2);
+      expect(postChecks!.postCheckResults![0].passed).toBe(false);
+      expect(postChecks!.postCheckResults![1].passed).toBe(true);
     });
 
     it('treats a throwing post-check as a failure, not a crash', async () => {
@@ -116,8 +116,8 @@ describe('MigrationSafetyService (#263)', () => {
 
       expect(report.ok).toBe(false);
       const postChecks = report.phases.find((p) => p.phase === 'post-check');
-      expect(postChecks.postCheckResults[0].passed).toBe(false);
-      expect(postChecks.postCheckResults[0].detail).toContain('boom');
+      expect(postChecks!.postCheckResults![0].passed).toBe(false);
+      expect(postChecks!.postCheckResults![0].detail).toContain('boom');
     });
   });
 
@@ -134,7 +134,7 @@ describe('MigrationSafetyService (#263)', () => {
 
       expect(report.ok).toBe(false);
       expect(report.error).toContain('lock timeout');
-      expect(report.phases.find((p) => p.phase === 'apply').ok).toBe(false);
+      expect(report.phases.find((p) => p.phase === 'apply')!.ok).toBe(false);
       expect(report.phases.find((p) => p.phase === 'post-check')).toBeUndefined();
       expect(report.rollbackNotes).toContain('DROP INDEX');
       expect(writes).toHaveLength(0);

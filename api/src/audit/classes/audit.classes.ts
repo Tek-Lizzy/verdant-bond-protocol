@@ -1,8 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { randomUUID } from 'crypto';
-import { AuditRecord } from './interfaces/audit.interface';
-import { stableStringify } from './audit.canonical';
+import { AuditRecord } from '../audit.interface';
+import { stableStringify } from '../audit.canonical';
 
 /**
  * One step in the history of a single entity: the hash of the record's
@@ -24,7 +24,7 @@ export class AuditChainStep {
 export class AuditWriteResult {
   kind: 'recorded' | 'rejected';
   rejectReason: string;
-  record: AuditRecord;
+  record: AuditRecord | null;
 }
 
 export class AuditRecordRef {
@@ -37,7 +37,7 @@ export class AuditWrite {
   entityId: string;
   action: string;
   actor: string;
-  reason: string;
-  before: Record<string, any>;
-  after: Record<string, any>;
+  reason?: string;
+  before: Record<string, any> | null;
+  after: Record<string, any> | null;
 }

@@ -12,6 +12,7 @@
     "monitor": "ts-node run.ts monitor",
     "test": "jest",
     "test:cov": "jest --coverage",
+    "lint": "eslint \"**/*.ts\"",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -21,6 +22,9 @@
   "devDependencies": {
     "@types/jest": "^29.5.0",
     "@types/node": "^20.11.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "eslint": "^8.57.0",
     "jest": "^29.7.0",
     "ts-jest": "^29.1.0",
     "ts-node": "^10.9.0",

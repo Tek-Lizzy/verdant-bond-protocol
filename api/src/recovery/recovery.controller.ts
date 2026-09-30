@@ -1,8 +1,8 @@
 import { Controller, Post, Get, Param, Body, UseGuards } from '@nestjs/common';
 import { RecoveryService } from './recovery.service';
 import { RecoveryOperation } from './recovery.interface';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { AdminGuard } from '../../common/guards/admin.guard';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { AdminGuard } from '../common/guards/admin.guard';
 
 /**
  * Recovery API (issue #261).

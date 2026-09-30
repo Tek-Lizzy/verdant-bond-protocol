@@ -111,7 +111,8 @@ export class PolicyService {
 
   calculateRedemptionPenalty(amount: bigint, performanceScore: number, daysRemaining: number): bigint {
     const baseAmount = amount;
-    const performanceFactor = Math.max(0, 1 - Math.abs(performanceScore) * 0.01);
+    // Underperformance (negative score) raises the penalty; outperformance lowers it.
+    const performanceFactor = Math.max(0, 1 - performanceScore * 0.01);
     const timeFactor = Math.max(0.5, 1 - (daysRemaining / 365) * 0.5);
     const penaltyPercentage = this.policyConfig.redeemptionPenaltyPercentage || 5;
 
@@ -125,7 +126,7 @@ export class PolicyService {
 
   updatePolicyConfiguration(updates: Partial<PolicyConfiguration>): void {
     this.policyConfig = { ...this.policyConfig, ...updates };
-    this.logger.info('Policy configuration updated', this.policyConfig);
+    this.logger.log('Policy configuration updated', this.policyConfig);
   }
 
   private isRestrictedJurisdiction(jurisdiction: string): boolean {

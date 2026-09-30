@@ -9,7 +9,6 @@ use soroban_sdk::{
 /// layout or interface change; see docs/upgrade-migrations.md.
 pub const SCHEMA_VERSION: u32 = 1;
 
-
 #[derive(Clone)]
 pub enum RegistryEvent {
     ProjectRegistered {
@@ -553,6 +552,8 @@ impl ProjectRegistry {
             .instance()
             .get(&DataKey::Admin)
             .ok_or(RegistryError::NotInitialized)
+    }
+
     /// Issue #188: versioned-interface convention — bump when the contract's
     /// storage layout or callable interface changes in a breaking way. See
     /// docs/upgrade-migrations.md.

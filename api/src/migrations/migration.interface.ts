@@ -61,6 +61,8 @@ export interface MigrationRunReport {
   startedAt: string;
   finishedAt?: string;
   ok: boolean;
+  /** Why the run failed, when it did. */
+  error?: string;
   phases: MigrationPhaseReport[];
   /** Filled when a phase failed so maintainers see the recorded recovery path. */
   rollbackNotes?: string;
