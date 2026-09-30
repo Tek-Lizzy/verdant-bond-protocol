@@ -15,8 +15,9 @@
     "seed:reset": "ts-node scripts/seed.ts --reset",
     "reindex-holders": "ts-node scripts/reindex-holders.ts",
     "validate:recovery": "ts-node scripts/validate-recovery.ts",
-    "mutate": "stryker-run",
-    "test:mutate": "stryker-run --reporter=progress --threshold=50"
+    "diagnostics": "ts-node scripts/diagnostics.ts",
+    "mutate": "stryker run stryker-config.json",
+    "test:mutate": "stryker run stryker-config.json --thresholds.break 50"
   },
   "dependencies": {
     "@nestjs/common": "^10.4.0",
@@ -41,6 +42,8 @@
     "@nestjs/cli": "^10.4.0",
     "@nestjs/schematics": "^10.1.0",
     "@nestjs/testing": "^10.4.0",
+    "@stryker-mutator/core": "^9.6.1",
+    "@stryker-mutator/jest-runner": "^9.6.1",
     "@types/express": "^4.17.21",
     "@types/jest": "^29.5.0",
     "@types/node": "^20.11.0",
@@ -65,6 +68,9 @@
       "ts"
     ],
     "rootDir": "src",
+    "testRegex": ".*\\.(spec|test)\\.ts$",
+    "transform": { "^.+\\.ts$": "ts-jest" },
+    "collectCoverageFrom": ["**/*.ts"],
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
       "^.+\\.ts$": "ts-jest"

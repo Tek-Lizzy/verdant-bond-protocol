@@ -1,6 +1,6 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Pool } from 'pg';
-import { AuditRecord } from './interfaces/audit.interface';
+import { AuditRecord } from './audit.interface';
 
 /**
  * Durable, Redis-independent row store for the audit chain (issue #260).
@@ -25,6 +25,11 @@ export class AuditDurableStore implements OnModuleInit, OnModuleDestroy {
 
   constructor() {
     this.pool = new Pool({ connectionString: process.env.DATABASE_URL });
+    // An idle client dropped by the server (restart, failover) is emitted here;
+    // unhandled, it would crash the process. The pool replaces the client.
+    this.pool.on('error', (error) => {
+      this.logger.warn(`Idle Postgres client error: ${error.message}`);
+    });
   }
 
   async onModuleInit(): Promise<void> {

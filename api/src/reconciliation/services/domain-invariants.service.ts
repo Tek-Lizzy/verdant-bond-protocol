@@ -496,7 +496,7 @@ export class DomainInvariantsService implements OnModuleInit {
     const startTime = Date.now();
     const driftsFound: ReconciliationDrift[] = [];
     const invariants = this.getAllInvariants();
-    let totalEntities = 0;
+    const totalEntities = 0;
 
     for (const invariant of invariants) {
       try {

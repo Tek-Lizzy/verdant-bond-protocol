@@ -177,6 +177,23 @@ export class RedisService {
     }
   }
 
+  async lpush(key: string, value: string): Promise<void> {
+    try {
+      await this.redis.lPush(key, value);
+    } catch (error) {
+      this.logDegraded('lpush', key, error);
+    }
+  }
+
+  async lrange(key: string, start: number, stop: number): Promise<string[]> {
+    try {
+      return await this.redis.lRange(key, start, stop);
+    } catch (error) {
+      this.logDegraded('lrange', key, error);
+      return [];
+    }
+  }
+
   async incrOrThrow(key: string): Promise<number> {
     try {
       return await this.redis.incr(key);

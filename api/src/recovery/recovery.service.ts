@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { NotificationsService } from '../notifications/notifications.service';
 import {
   RecoveryCheckpoint,
   RecoveryDiagnostic,
@@ -41,6 +42,8 @@ export class RecoveryService {
   private readonly userActions = new Map<string, RecoveryUserAction[]>();
   private readonly auditEvents: Array<Record<string, any>> = [];
 
+  constructor(private readonly notificationsService: NotificationsService) {}
+
   /**
    * Declare a new operation. Steps are copied defensively so a later change to
    * the caller's array cannot retroactively make a resumed run nondeterministic.
@@ -81,20 +84,22 @@ export class RecoveryService {
       throw new Error(`unknown operation: ${operationId}`);
     }
 
-    const last = operation.checkpoints[operation.checkpoints.length - 1];
-    if (last && (last.status === RecoveryOperationStatus.COMPLETED)) {
+    // Terminal states live on the operation: a COMPLETED checkpoint only
+    // means that one step finished.
+    if (operation.status === RecoveryOperationStatus.COMPLETED) {
       return operation; // nothing to do, idempotent
     }
-    if (last && last.status === RecoveryOperationStatus.ABANDONED) {
+    if (operation.status === RecoveryOperationStatus.ABANDONED) {
       throw new Error(`operation ${operationId} was abandoned; cannot resume`);
     }
+    const last = operation.checkpoints[operation.checkpoints.length - 1];
 
     operation.resumeAttempts++;
     operation.status = RecoveryOperationStatus.RECOVERING;
     this.audit('resume_started', operation, last?.stepIndex ?? 0);
 
     let state: Record<string, any> = last?.state ?? {};
-    let startIndex = (last?.stepIndex ?? 0);
+    const startIndex = (last?.stepIndex ?? 0);
 
     for (let index = startIndex; index < operation.steps.length; index++) {
       const step = operation.steps[index];
@@ -122,6 +127,7 @@ export class RecoveryService {
         await this.checkpoint(operation, index, state, RecoveryOperationStatus.COMPLETED, step.id);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
+        operation.status = RecoveryOperationStatus.INTERRUPTED;
         await this.checkpoint(operation, index, state, RecoveryOperationStatus.INTERRUPTED, step.id, message);
         this.recordUserAction(operation, step, message);
         this.audit('interrupted', operation, index, message);
@@ -129,10 +135,10 @@ export class RecoveryService {
       }
     }
 
+    // The last step's COMPLETED checkpoint already records the final state.
     operation.status = RecoveryOperationStatus.COMPLETED;
     operation.completedAt = new Date().toISOString();
     operation.updatedAt = operation.completedAt;
-    await this.checkpoint(operation, operation.steps.length - 1, state, RecoveryOperationStatus.COMPLETED);
     this.audit('completed', operation, operation.steps.length - 1);
     return operation;
   }
@@ -155,7 +161,7 @@ export class RecoveryService {
     for (const operation of this.operations.values()) {
       const last = operation.checkpoints[operation.checkpoints.length - 1];
       if (!last) continue;
-      if (last.status === RecoveryOperationStatus.COMPLETED) continue;
+      if (operation.status === RecoveryOperationStatus.COMPLETED) continue;
 
       const updatedAt = new Date(operation.updatedAt).getTime();
       out.push({
@@ -179,7 +185,7 @@ export class RecoveryService {
     if (!operation) return false;
 
     const last = operation.checkpoints[operation.checkpoints.length - 1];
-    if (last && last.status === RecoveryOperationStatus.COMPLETED) return false;
+    if (operation.status === RecoveryOperationStatus.COMPLETED) return false;
 
     const updatedAt = new Date(operation.updatedAt).getTime();
     if (now - updatedAt < olderThanMs) return false;
@@ -218,6 +224,12 @@ export class RecoveryService {
       state: { ...state },
       error,
     };
+    // The NOT_STARTED checkpoint written by `start` is only a resume point for
+    // an operation that never ran; the first completed step supersedes it.
+    const tail = operation.checkpoints[operation.checkpoints.length - 1];
+    if (tail?.status === RecoveryOperationStatus.NOT_STARTED && status === RecoveryOperationStatus.COMPLETED) {
+      operation.checkpoints.pop();
+    }
     operation.checkpoints.push(checkpoint);
     operation.updatedAt = checkpoint.recordedAt;
     if (error) operation.lastError = error;
@@ -233,6 +245,13 @@ export class RecoveryService {
     });
     this.userActions.set(operation.operationId, actions);
     this.logger.warn(`operation ${operation.operationId} interrupted at ${step.id}: ${error}`);
+    this.notificationsService.createNotification({
+      userId: 'admin',
+      type: 'RECOVERY_INTERRUPTED',
+      message: `Recovery operation ${operation.type} interrupted at step ${step.id}: ${error}`,
+      eventId: `recovery_${operation.operationId}_${step.id}`,
+      link: `/admin/recovery/${operation.operationId}`
+    });
   }
 
   private audit(event: string, operation: RecoveryOperation, stepIndex: number, error?: string): void {

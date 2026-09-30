@@ -1,9 +1,9 @@
 import { Controller, Post, Get, Param, Body, UseGuards, Delete, Req } from '@nestjs/common';
-import { Request } from 'express';
 import { ImpersonationService } from './impersonation.service';
 import { ImpersonationSession } from './impersonation.interface';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { AdminGuard } from '../../common/guards/admin.guard';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { AdminGuard } from '../common/guards/admin.guard';
+import { AuthenticatedRequest } from '../common/interfaces/authenticated-request.interface';
 
 /**
  * Impersonation API (issue #264).
@@ -22,7 +22,7 @@ export class ImpersonationController {
   @Post('sessions')
   @UseGuards(AdminGuard)
   async start(
-    @Req() req: Request,
+    @Req() req: AuthenticatedRequest,
     @Body()
     body: {
       targetAddress: string;
@@ -50,7 +50,7 @@ export class ImpersonationController {
   @Delete('sessions/:sessionId')
   @UseGuards(AdminGuard)
   async end(
-    @Req() req: Request,
+    @Req() req: AuthenticatedRequest,
     @Param('sessionId') sessionId: string,
   ): Promise<{ ended: boolean }> {
     const ended = await this.impersonation.end(sessionId, req.user?.walletAddress);

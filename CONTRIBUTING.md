@@ -97,6 +97,22 @@ verdant-bond-protocol/
 6. **Commit** using conventional commits (see below)
 7. **Push** and open a **Pull Request** against `main`
 
+## E2E Testing
+
+To run the end-to-end tests locally, use the following command in the `api` directory:
+
+```bash
+npm run test:e2e
+```
+
+For the highest-risk user journey (subscription with failure and recovery modes), run:
+
+```bash
+npx jest --config ./test/jest-e2e.json test/subscription-journey.e2e-spec.ts
+```
+
+Ensure you have a local Redis instance running if required, and mock environments are configured properly.
+
 ### Branch Naming
 
 - `feat/description` — New features
@@ -221,9 +237,12 @@ Mutation testing introduces controlled faults (mutants) into the codebase to ver
 
 ```bash
 cd api
-npm run mutate     # Run stryker mutation testing
+npm run mutate     # Run Stryker mutation testing
 npm run test:mutate # Run with threshold check (fails if score < 50%)
 ```
+
+Mutation testing runs locally, not in CI: the critical modules below produce
+about 2,400 mutants, which takes hours. Run it before merging changes to them.
 
 The mutation testing configuration is in `api/stryker-config.json`. Critical modules monitored:
 - Financial math: `api/src/bonds/`, `api/src/oracle/`
@@ -292,6 +311,17 @@ Use the [Feature Request template](.github/ISSUE_TEMPLATE/feature_request.md). I
 - Check existing [issues](https://github.com/prissca/verdant-bond-protocol/issues) and [discussions](https://github.com/prissca/verdant-bond-protocol/discussions)
 - Review [docs/](./docs/) for architecture and design details
 - Open a [discussion](https://github.com/prissca/verdant-bond-protocol/discussions) for questions
+
+## Role-Based Access Control (RBAC)
+
+Verdant Bond Protocol uses a centralized, consistently enforced role-based access control system across both API and UI boundaries. 
+The defined roles and their capabilities are:
+- **MAINTAINER**: Has all permissions. Usually assigned to the protocol admin.
+- **ISSUER**: Can create bonds, distribute coupons, mature bonds, export bonds, and approve/reject projects.
+- **INVESTOR**: Can subscribe to bonds, claim credits, and transfer bonds.
+- **SETTLEMENT_MANAGER**: Can reconcile holders, reindex holders, sweep undistributed funds, register oracle providers, and manage oracle incidents.
+
+Roles are granted based on wallet addresses matching configured environment variables (e.g., `ISSUER_PUBLIC_KEYS`, `SETTLEMENT_PUBLIC_KEYS`) or via the `STELLAR_PUBLIC_KEY` for the maintainer.
 
 ---
 

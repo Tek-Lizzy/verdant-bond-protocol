@@ -112,6 +112,11 @@ export class OracleIncidentRepository implements OnModuleInit, OnModuleDestroy {
 
   constructor() {
     this.pool = new Pool({ connectionString: process.env.DATABASE_URL });
+    // An idle client dropped by the server (restart, failover) is emitted here;
+    // unhandled, it would crash the process. The pool replaces the client.
+    this.pool.on('error', (error) => {
+      this.logger.warn(`Idle Postgres client error: ${error.message}`);
+    });
     this.escalationThresholds = parseEscalationThresholds(
       process.env.ORACLE_INCIDENT_ESCALATION_THRESHOLDS,
     );
@@ -212,7 +217,7 @@ export class OracleIncidentRepository implements OnModuleInit, OnModuleDestroy {
   ): Promise<PaginatedResponse<OracleIncident>> {
     let offsetClause = '';
     let offsetParams: any[] = [];
-    let queryParams: any[] = status ? [status] : [];
+    const queryParams: any[] = status ? [status] : [];
     
     if (cursor) {
       const cursorDate = new Date(cursor).toISOString();

@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 import { InvitationService } from './invitation.service';
 import { Invitation } from './invitation.interface';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 
 /**
  * Invitation & collaboration API (issue #265).

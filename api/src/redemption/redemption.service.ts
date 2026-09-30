@@ -1,4 +1,4 @@
-import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, Optional } from '@nestjs/common';
 import {
   EarlyRedemptionRequest,
   RedemptionPayout,
@@ -16,7 +16,7 @@ export class RedemptionService {
 
   constructor(
     private readonly bondsService: BondsService,
-    private readonly oracleService?: OracleService,
+    @Optional() private readonly oracleService?: OracleService,
   ) {}
 
   async evaluateEarlyRedemption(request: EarlyRedemptionRequest): Promise<RedemptionPayout> {
@@ -70,15 +70,16 @@ export class RedemptionService {
     totalRedemptionAmount: string,
   ): Promise<SolvencyCheck> {
     try {
-      const bond = await this.bondsService.findOne(bondId);
-      const holders = await this.bondsService.getHolders(bondId);
+      // Existence check: findOne throws for an unknown bond.
+      await this.bondsService.findOne(bondId);
       const couponData = await this.bondsService.getUndistributedTotal(bondId);
 
       const amount = BigInt(totalRedemptionAmount);
       const undistributed = BigInt(couponData.undistributedTotal);
 
-      const totalHolders = holders.holders.length;
-      const estimatedCouponObligation = undistributed + (BigInt(bond.couponRate || '0') * BigInt(totalHolders)) / BigInt(100);
+      // Bonds carry no fixed coupon rate (coupons follow verified performance),
+      // so the outstanding obligation is what is already accrued but unpaid.
+      const estimatedCouponObligation = undistributed;
 
       const reserveRequired = estimatedCouponObligation * BigInt(this.SOLVENCY_RESERVE_PERCENTAGE) / BigInt(100);
       const totalCapacity = undistributed - reserveRequired;
@@ -100,7 +101,8 @@ export class RedemptionService {
 
   async verifyTrancheProtection(bondId: number, redemptionAmount: string): Promise<TrancheProtection> {
     try {
-      const bond = await this.bondsService.findOne(bondId);
+      // Existence check: findOne throws for an unknown bond.
+      await this.bondsService.findOne(bondId);
       const couponData = await this.bondsService.getUndistributedTotal(bondId);
 
       const amount = BigInt(redemptionAmount);
@@ -112,7 +114,8 @@ export class RedemptionService {
       const isProtected = available >= couponObligations * BigInt(50) / BigInt(100);
 
       return {
-        trancheName: bond.trancheName || 'standard',
+        // Bonds are issued as a single tranche.
+        trancheName: 'standard',
         couponObligations: couponObligations.toString(),
         projectedCouponPayable: projectedPayable.toString(),
         availableLiquidity: available.toString(),
@@ -132,7 +135,8 @@ export class RedemptionService {
     const performanceScore = performanceMetrics.trailingAverageScore;
     const yearFraction = timeToMaturityDays / 365;
 
-    const performancePenaltyPercentage = Math.max(0, Math.abs(performanceScore) * 0.5);
+    // Only underperformance (a negative score) is penalised.
+    const performancePenaltyPercentage = Math.max(0, -performanceScore * 0.5);
     const timingPenaltyPercentage = Math.max(0, (1 - yearFraction) * 10);
     const totalPenaltyPercentage = performancePenaltyPercentage + timingPenaltyPercentage;
 

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import { AuditRecord } from './interfaces/audit.interface';
+import { AuditRecord } from './audit.interface';
 
 export const AUDIT_CHAIN_RESET_IGNORED = 'audit-chain-reset-ignored';
 

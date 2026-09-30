@@ -193,8 +193,8 @@ describe('ImpersonationService (#264)', () => {
 
       const denial = service.getAuditTrail().find((e) => e.event === 'operation_denied');
       expect(denial).toBeDefined();
-      expect(denial.operation).toBe('bond.migrate');
-      expect(denial.detail).toContain('dangerous');
+      expect(denial!.operation).toBe('bond.migrate');
+      expect(denial!.detail).toContain('dangerous');
     });
 
     it('records an expired session as expired, not silently dropped', async () => {
@@ -205,7 +205,7 @@ describe('ImpersonationService (#264)', () => {
 
       const expired = service.getAuditTrail().find((e) => e.event === 'expired');
       expect(expired).toBeDefined();
-      expect(expired.sessionId).toBe(session.sessionId);
+      expect(expired!.sessionId).toBe(session.sessionId);
     });
   });
 

@@ -511,7 +511,6 @@ impl Governance {
         SCHEMA_VERSION
     }
 
-
     pub fn is_signer(env: Env, address: Address) -> bool {
         env.storage()
             .instance()
