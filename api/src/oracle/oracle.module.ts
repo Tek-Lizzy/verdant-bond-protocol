@@ -26,9 +26,6 @@ import { IotProvider } from './providers/iot.provider';
     BlueCarbonProvider,
     IotProvider,
   ],
-  // OracleIncidentRepository is exported so the public status feed
-  // (StatusModule, issue #303) can read incident state without duplicating
-  // its query logic.
-  exports: [OracleService, OracleMonitoringService, GracePeriodService, OracleIncidentRepository, IotProvider],
+  exports: [OracleService, OracleMonitoringService, OracleIncidentRepository],
 })
 export class OracleModule {}
