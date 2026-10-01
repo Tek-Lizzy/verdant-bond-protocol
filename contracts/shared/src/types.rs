@@ -53,6 +53,9 @@ pub struct BondConfig {
     pub credit_type: CreditType,
     pub maturity_date: u64,
     pub total_supply: i128,
+    pub credit_vintage: u64,
+    pub serial_number_start: i128,
+    pub serial_number_end: i128,
 }
 
 /// Aggregated redemption funding view for a bond (Issue #150).

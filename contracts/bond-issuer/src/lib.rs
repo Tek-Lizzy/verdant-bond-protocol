@@ -1,7 +1,7 @@
 #![no_std]
 #![allow(deprecated)]
 use nbbs_shared::{BondConfig, BondError, BondStatus, CreditType, RedemptionCoverage};
-use soroban_sdk::{contract, contractimpl, contracttype, vec, Address, Env, IntoVal, Symbol};
+use soroban_sdk::{BytesN, Vec, contract, contractimpl, contracttype, vec, Address, Env, IntoVal, Symbol};
 
 pub const MAX_SUPPLY: i128 = 1_000_000_000_000_000_000;
 
@@ -12,6 +12,7 @@ pub const SCHEMA_VERSION: u32 = 1;
 #[derive(Clone)]
 #[contracttype]
 pub enum DataKey {
+    CommittedRanges(BytesN<32>, u64),
     Admin,
     BondConfig(u64),
     BondState(u64),
@@ -20,6 +21,13 @@ pub enum DataKey {
     BondCount,
     Nonce(Address),
     ProjectRegistry,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+#[contracttype]
+pub struct SerialRange {
+    pub start: i128,
+    pub end: i128,
 }
 
 #[derive(Clone, Debug)]
@@ -227,6 +235,28 @@ impl BondIssuer {
             .instance()
             .get(&DataKey::BondCount)
             .unwrap_or(0);
+                let range_key = DataKey::CommittedRanges(config.project_id.clone(), config.credit_vintage);
+        let mut ranges: Vec<SerialRange> = env.storage().persistent().get(&range_key).unwrap_or(vec![&env]);
+        
+        let new_start = config.serial_number_start;
+        let new_end = config.serial_number_end;
+        
+        if new_start > new_end {
+            return Err(BondError::InvalidSupply);
+        }
+        
+        for i in 0..ranges.len() {
+            let r = ranges.get(i).unwrap();
+            let max_start = if new_start > r.start { new_start } else { r.start };
+            let min_end = if new_end < r.end { new_end } else { r.end };
+            if max_start <= min_end {
+                return Err(BondError::InvalidSupply);
+            }
+        }
+        
+        ranges.push_back(SerialRange { start: new_start, end: new_end });
+        env.storage().persistent().set(&range_key, &ranges);
+
         let bond_id = count + 1;
         env.storage().instance().set(&DataKey::BondCount, &bond_id);
 
@@ -708,7 +738,11 @@ mod test {
             coupon_schedule: vec![&env, 1000000u64, 2000000u64],
             credit_type: nbbs_shared::CreditType::Carbon,
             maturity_date: 3000000,
-            total_supply: 10000,
+            total_supply: 10_000,
+            credit_vintage: 2024,
+            serial_number_start: 1,
+            serial_number_end: 10_000,
+            
         }
     }
 
@@ -720,6 +754,82 @@ mod test {
         let contract_id = env.register(BondIssuer, (&admin,));
         let client = BondIssuerClient::new(&env, &contract_id);
         (env, client, admin, user)
+    }
+
+
+    #[test]
+    fn test_issue_bond_overlap_detection() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let admin = Address::generate(&env);
+        let id = env.register(BondIssuer, (admin.clone(),));
+        let client = BondIssuerClient::new(&env, &id);
+
+        let config1 = BondConfig {
+            project_id: create_project_id(&env, 1),
+            face_value: 1000,
+            coupon_schedule: vec![&env, 1000u64],
+            credit_type: CreditType::Carbon,
+            maturity_date: 2000,
+            total_supply: 10_000,
+            credit_vintage: 2024,
+            serial_number_start: 100,
+            serial_number_end: 200,
+        };
+        assert_eq!(client.issue_bond(&admin, &config1, &0), 1);
+
+        // Near-miss (adjacent) - before
+        let config2 = BondConfig {
+            project_id: create_project_id(&env, 1),
+            face_value: 1000,
+            coupon_schedule: vec![&env, 1000u64],
+            credit_type: CreditType::Carbon,
+            maturity_date: 2000,
+            total_supply: 10_000,
+            credit_vintage: 2024,
+            serial_number_start: 50,
+            serial_number_end: 99,
+        };
+        assert_eq!(client.issue_bond(&admin, &config2, &1), 2);
+
+        // Near-miss (adjacent) - after
+        let config3 = BondConfig {
+            project_id: create_project_id(&env, 1),
+            face_value: 1000,
+            coupon_schedule: vec![&env, 1000u64],
+            credit_type: CreditType::Carbon,
+            maturity_date: 2000,
+            total_supply: 10_000,
+            credit_vintage: 2024,
+            serial_number_start: 201,
+            serial_number_end: 300,
+        };
+        assert_eq!(client.issue_bond(&admin, &config3, &2), 3);
+
+        // Exact overlap
+        let mut config_overlap = config1.clone();
+        config_overlap.serial_number_start = 150;
+        config_overlap.serial_number_end = 250;
+        assert_eq!(client.try_issue_bond(&admin, &config_overlap, &3), Err(Ok(BondError::InvalidSupply)));
+
+        // Subset
+        let mut config_subset = config1.clone();
+        config_subset.serial_number_start = 120;
+        config_subset.serial_number_end = 180;
+        assert_eq!(client.try_issue_bond(&admin, &config_subset, &3), Err(Ok(BondError::InvalidSupply)));
+        
+        // Overlap boundary - start
+        let mut config_b1 = config1.clone();
+        config_b1.serial_number_start = 90;
+        config_b1.serial_number_end = 100;
+        assert_eq!(client.try_issue_bond(&admin, &config_b1, &3), Err(Ok(BondError::InvalidSupply)));
+
+        // Overlap boundary - end
+        let mut config_b2 = config1.clone();
+        config_b2.serial_number_start = 200;
+        config_b2.serial_number_end = 210;
+        assert_eq!(client.try_issue_bond(&admin, &config_b2, &3), Err(Ok(BondError::InvalidSupply)));
     }
 
     #[test]
@@ -1234,7 +1344,10 @@ mod test {
         assert_eq!(bond_id, 1);
         assert_eq!(client.bond_count(), 1);
 
-        client.issue_bond(&admin, &config, &1);
+                let mut config2 = config.clone();
+        config2.serial_number_start = 10001;
+        config2.serial_number_end = 20000;
+        client.issue_bond(&admin, &config2, &1);
         assert_eq!(client.bond_count(), 2);
     }
 

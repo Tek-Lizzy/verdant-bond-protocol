@@ -44,8 +44,8 @@ pub enum DataKey {
     PeriodInfo(u64, u32),
     PeriodBatchCursor(u64, u32),
     PeriodCount(u64),
-    AccruedCredits(u64, Address),
-    AccruedCreditsByType(u64, Address, CreditType),
+    EscrowedCredits(u64, Address),
+    EscrowedCreditsByType(u64, Address, CreditType),
     BondProject(u64),
     BondCreditType(u64),
     UndistributedTotal(u64),
@@ -585,7 +585,7 @@ impl CouponEngine {
                             total_holder_credits = total_holder_credits
                                 .checked_add(holder_credits)
                                 .ok_or(BondError::Overflow)?;
-                            accrue_credits(
+                            escrow_credits(
                                 &env,
                                 bond_id,
                                 period_index,
@@ -603,7 +603,7 @@ impl CouponEngine {
                             total_holder_credits = total_holder_credits
                                 .checked_add(holder_credits)
                                 .ok_or(BondError::Overflow)?;
-                            accrue_credits(
+                            escrow_credits(
                                 &env,
                                 bond_id,
                                 period_index,
@@ -626,7 +626,7 @@ impl CouponEngine {
                                 .checked_add(holder_credits)
                                 .ok_or(BondError::Overflow)?;
                             if carbon_holder > 0 {
-                                accrue_credits(
+                                escrow_credits(
                                     &env,
                                     bond_id,
                                     period_index,
@@ -636,7 +636,7 @@ impl CouponEngine {
                                 )?;
                             }
                             if biodiversity_holder > 0 {
-                                accrue_credits(
+                                escrow_credits(
                                     &env,
                                     bond_id,
                                     period_index,
@@ -734,14 +734,67 @@ impl CouponEngine {
         })
     }
 
-    pub fn accrued_credits(env: Env, bond_id: u64, holder: Address) -> i128 {
+    
+    pub fn confirm_retirement(
+        env: Env,
+        caller: Address,
+        bond_id: u64,
+        holder: Address,
+        amount: i128,
+        nonce: u64,
+    ) -> Result<(), BondError> {
+        caller.require_auth();
+        let expected_nonce = get_nonce(&env, &caller);
+        if nonce != expected_nonce {
+            return Err(BondError::InvalidNonce);
+        }
+        set_nonce(&env, &caller, expected_nonce + 1);
+        require_admin(&env, &caller)?;
+
+        let key = DataKey::EscrowedCredits(bond_id, holder.clone());
+        let current: i128 = env.storage().persistent().get(&key).unwrap_or(0);
+        if amount > current {
+            return Err(BondError::Overflow);
+        }
+        env.storage().persistent().set(&key, &(current - amount));
+
+        Ok(())
+    }
+
+    pub fn revert_payout(
+        env: Env,
+        caller: Address,
+        bond_id: u64,
+        holder: Address,
+        amount: i128,
+        nonce: u64,
+    ) -> Result<(), BondError> {
+        caller.require_auth();
+        let expected_nonce = get_nonce(&env, &caller);
+        if nonce != expected_nonce {
+            return Err(BondError::InvalidNonce);
+        }
+        set_nonce(&env, &caller, expected_nonce + 1);
+        require_admin(&env, &caller)?;
+
+        let key = DataKey::EscrowedCredits(bond_id, holder.clone());
+        let current: i128 = env.storage().persistent().get(&key).unwrap_or(0);
+        if amount > current {
+            return Err(BondError::Overflow);
+        }
+        env.storage().persistent().set(&key, &(current - amount));
+        
+        Ok(())
+    }
+
+    pub fn escrowed_credits(env: Env, bond_id: u64, holder: Address) -> i128 {
         env.storage()
             .persistent()
-            .get(&DataKey::AccruedCredits(bond_id, holder))
+            .get(&DataKey::EscrowedCredits(bond_id, holder))
             .unwrap_or(0)
     }
 
-    pub fn accrued_credits_by_type(
+    pub fn escrowed_credits_by_type(
         env: Env,
         bond_id: u64,
         holder: Address,
@@ -749,13 +802,13 @@ impl CouponEngine {
     ) -> i128 {
         env.storage()
             .persistent()
-            .get(&DataKey::AccruedCreditsByType(bond_id, holder, credit_type))
+            .get(&DataKey::EscrowedCreditsByType(bond_id, holder, credit_type))
             .unwrap_or(0)
     }
 
     /// Total claimable coupons for a holder on a bond, in minor units (#156).
     pub fn claimable_credits(env: Env, bond_id: u64, holder: Address) -> i128 {
-        Self::accrued_credits(env, bond_id, holder)
+        Self::escrowed_credits(env, bond_id, holder)
     }
 
     /// Itemized claimable coupons for a holder on a bond (#156). One entry per
@@ -829,7 +882,7 @@ impl CouponEngine {
         // Issue #188: claims are paused while a migration window is open.
         require_no_migration_window(&env, bond_id)?;
 
-        let key = DataKey::AccruedCredits(bond_id, caller.clone());
+        let key = DataKey::EscrowedCredits(bond_id, caller.clone());
         let accrued: i128 = env.storage().persistent().get(&key).unwrap_or(0);
         env.storage().persistent().set(&key, &0i128);
 
@@ -900,7 +953,7 @@ impl CouponEngine {
         // Issue #188: consumption is paused while a migration window is open.
         require_no_migration_window(&env, bond_id)?;
 
-        let key = DataKey::AccruedCredits(bond_id, holder.clone());
+        let key = DataKey::EscrowedCredits(bond_id, holder.clone());
         let accrued: i128 = env.storage().persistent().get(&key).unwrap_or(0);
         if amount > accrued {
             return Err(BondError::Overflow);
@@ -928,7 +981,7 @@ impl CouponEngine {
                 env.storage().persistent().set(&period_key, &(entry - take));
 
                 let by_type_key =
-                    DataKey::AccruedCreditsByType(bond_id, holder.clone(), credit_type);
+                    DataKey::EscrowedCreditsByType(bond_id, holder.clone(), credit_type);
                 let by_type: i128 = env.storage().persistent().get(&by_type_key).unwrap_or(0);
                 env.storage().persistent().set(
                     &by_type_key,
@@ -1322,7 +1375,7 @@ fn compute_biodiversity_credits(metrics: &BiodiversityMetrics) -> i128 {
         .saturating_div(HABITAT_CREDIT_RATE)
 }
 
-fn accrue_credits(
+fn escrow_credits(
     env: &Env,
     bond_id: u64,
     period_index: u32,
@@ -1330,7 +1383,7 @@ fn accrue_credits(
     credit_type: CreditType,
     amount: i128,
 ) -> Result<(), BondError> {
-    let by_type_key = DataKey::AccruedCreditsByType(bond_id, holder.clone(), credit_type);
+    let by_type_key = DataKey::EscrowedCreditsByType(bond_id, holder.clone(), credit_type);
     let by_type: i128 = env.storage().persistent().get(&by_type_key).unwrap_or(0);
     env.storage().persistent().set(
         &by_type_key,
@@ -1346,7 +1399,7 @@ fn accrue_credits(
             .ok_or(BondError::Overflow)?,
     );
 
-    let combined_key = DataKey::AccruedCredits(bond_id, holder);
+    let combined_key = DataKey::EscrowedCredits(bond_id, holder);
     let combined: i128 = env.storage().persistent().get(&combined_key).unwrap_or(0);
     env.storage().persistent().set(
         &combined_key,
@@ -1367,7 +1420,7 @@ fn clear_period_holder(
 }
 
 fn clear_accrued(env: &Env, bond_id: u64, holder: &Address, credit_type: CreditType) {
-    let key = DataKey::AccruedCreditsByType(bond_id, holder.clone(), credit_type);
+    let key = DataKey::EscrowedCreditsByType(bond_id, holder.clone(), credit_type);
     env.storage().persistent().set(&key, &0i128);
 }
 
@@ -1533,6 +1586,10 @@ mod test {
             credit_type: nbbs_shared::CreditType::Carbon,
             maturity_date: 3_000_000,
             total_supply: 10_000,
+            credit_vintage: 2024,
+            serial_number_start: 1,
+            serial_number_end: 10_000,
+            
         }
     }
 
@@ -1770,7 +1827,7 @@ mod test {
             100 * CREDIT_MINOR_UNITS * FIXED_POINT / 10000
         );
 
-        let accrued = t.client.accrued_credits(&bond_id, &holder);
+        let accrued = t.client.escrowed_credits(&bond_id, &holder);
         assert_eq!(accrued, 100 * CREDIT_MINOR_UNITS);
 
         let period_info = t.client.get_period_info(&bond_id, &0);
@@ -1823,9 +1880,9 @@ mod test {
                 / HABITAT_CREDIT_RATE;
         assert_eq!(result.total_credits, total);
 
-        let accrued = t.client.accrued_credits(&bond_id, &holder);
+        let accrued = t.client.escrowed_credits(&bond_id, &holder);
         assert_eq!(accrued, total);
-        let by_type = t.client.accrued_credits_by_type(
+        let by_type = t.client.escrowed_credits_by_type(
             &bond_id,
             &holder,
             &nbbs_shared::CreditType::Biodiversity,
@@ -1877,16 +1934,16 @@ mod test {
 
         let carbon_accrued =
             t.client
-                .accrued_credits_by_type(&bond_id, &holder, &nbbs_shared::CreditType::Carbon);
+                .escrowed_credits_by_type(&bond_id, &holder, &nbbs_shared::CreditType::Carbon);
         assert_eq!(carbon_accrued, carbon_total);
-        let bio_accrued = t.client.accrued_credits_by_type(
+        let bio_accrued = t.client.escrowed_credits_by_type(
             &bond_id,
             &holder,
             &nbbs_shared::CreditType::Biodiversity,
         );
         assert_eq!(bio_accrued, bio_total);
 
-        let combined = t.client.accrued_credits(&bond_id, &holder);
+        let combined = t.client.escrowed_credits(&bond_id, &holder);
         assert_eq!(combined, carbon_total + bio_total);
     }
 
@@ -1962,8 +2019,8 @@ mod test {
         let expected_h1 = credits_per_token * 3000 / FIXED_POINT;
         let expected_h2 = credits_per_token * 7000 / FIXED_POINT;
 
-        assert_eq!(t.client.accrued_credits(&bond_id, &holder1), expected_h1);
-        assert_eq!(t.client.accrued_credits(&bond_id, &holder2), expected_h2);
+        assert_eq!(t.client.escrowed_credits(&bond_id, &holder1), expected_h1);
+        assert_eq!(t.client.escrowed_credits(&bond_id, &holder2), expected_h2);
         assert_eq!(expected_h1 + expected_h2, total_credits);
     }
 
@@ -1993,7 +2050,7 @@ mod test {
         assert_eq!(result.holder_count, 0);
         assert_eq!(result.credits_per_token, 0);
 
-        let accrued = t.client.accrued_credits(&bond_id, &holder);
+        let accrued = t.client.escrowed_credits(&bond_id, &holder);
         assert_eq!(accrued, 0);
     }
 
@@ -2026,7 +2083,7 @@ mod test {
             .try_distribute_coupon(&t.admin, &bond_id, &0, &holders, &report_id, &1);
         assert_eq!(result, Err(Ok(BondError::ReportNotVerified)));
 
-        let accrued = t.client.accrued_credits(&bond_id, &holder);
+        let accrued = t.client.escrowed_credits(&bond_id, &holder);
         assert_eq!(accrued, 0);
     }
 
@@ -2148,7 +2205,7 @@ mod test {
         let claimed = t.client.claim_credits(&holder, &bond_id, &0);
         assert_eq!(claimed, 100 * CREDIT_MINOR_UNITS);
 
-        let accrued = t.client.accrued_credits(&bond_id, &holder);
+        let accrued = t.client.escrowed_credits(&bond_id, &holder);
         assert_eq!(accrued, 0);
     }
 
@@ -2367,7 +2424,7 @@ mod test {
             .client
             .try_distribute_coupon(&t.admin, &bond_id, &0, &holders, &report_id, &1);
         assert_eq!(result, Err(Ok(BondError::Overflow)));
-        assert_eq!(t.client.accrued_credits(&bond_id, &holder), 0);
+        assert_eq!(t.client.escrowed_credits(&bond_id, &holder), 0);
     }
 
     #[test]
@@ -2411,11 +2468,11 @@ mod test {
         assert!(t.client.get_period_info(&bond_id, &0).distributed);
         assert_eq!(t.client.get_period_count(&bond_id), 1);
         assert_eq!(
-            t.client.accrued_credits(&bond_id, &holder_a),
+            t.client.escrowed_credits(&bond_id, &holder_a),
             50 * CREDIT_MINOR_UNITS
         );
         assert_eq!(
-            t.client.accrued_credits(&bond_id, &holder_b),
+            t.client.escrowed_credits(&bond_id, &holder_b),
             50 * CREDIT_MINOR_UNITS
         );
     }
@@ -2451,7 +2508,7 @@ mod test {
     }
 
     #[test]
-    fn test_query_accrued_credits_zero() {
+    fn test_query_escrowed_credits_zero() {
         let env = Env::default();
         env.mock_all_auths();
 
@@ -2463,7 +2520,7 @@ mod test {
         let client = CouponEngineClient::new(&env, &contract_id);
 
         let holder = Address::generate(&env);
-        let accrued = client.accrued_credits(&1, &holder);
+        let accrued = client.escrowed_credits(&1, &holder);
         assert_eq!(accrued, 0);
     }
 
@@ -2520,7 +2577,7 @@ mod test {
         let period_0 = 10 * CREDIT_MINOR_UNITS;
         let period_1 = 20 * CREDIT_MINOR_UNITS;
         assert_eq!(
-            t.client.accrued_credits(&bond_id, &holder),
+            t.client.escrowed_credits(&bond_id, &holder),
             period_0 + period_1
         );
 
@@ -2528,12 +2585,12 @@ mod test {
         let amount = period_0 + 5 * CREDIT_MINOR_UNITS;
         t.client.consume_credits(&holder, &bond_id, &amount);
         assert_eq!(
-            t.client.accrued_credits(&bond_id, &holder),
+            t.client.escrowed_credits(&bond_id, &holder),
             15 * CREDIT_MINOR_UNITS
         );
         assert_eq!(
             t.client
-                .accrued_credits_by_type(&bond_id, &holder, &CreditType::Carbon),
+                .escrowed_credits_by_type(&bond_id, &holder, &CreditType::Carbon),
             15 * CREDIT_MINOR_UNITS
         );
         let details = t.client.claimable_credit_details(&bond_id, &holder);
@@ -2546,7 +2603,7 @@ mod test {
             t.client.claim_credits(&holder, &bond_id, &0),
             15 * CREDIT_MINOR_UNITS
         );
-        assert_eq!(t.client.accrued_credits(&bond_id, &holder), 0);
+        assert_eq!(t.client.escrowed_credits(&bond_id, &holder), 0);
     }
 
     #[test]
@@ -2575,7 +2632,7 @@ mod test {
             &report,
             &1,
         );
-        let accrued = t.client.accrued_credits(&bond_id, &holder);
+        let accrued = t.client.escrowed_credits(&bond_id, &holder);
 
         assert_eq!(
             t.client.try_consume_credits(&holder, &bond_id, &0),
@@ -2586,7 +2643,7 @@ mod test {
                 .try_consume_credits(&holder, &bond_id, &(accrued + 1)),
             Err(Ok(BondError::Overflow))
         );
-        assert_eq!(t.client.accrued_credits(&bond_id, &holder), accrued);
+        assert_eq!(t.client.escrowed_credits(&bond_id, &holder), accrued);
     }
 
     /// Same as `submit_verified_report` but with explicit reporting periods so
@@ -2964,7 +3021,7 @@ mod test {
         let holders = vec![&t._env, holder.clone()];
         t.client
             .distribute_coupon(&t.admin, &bond_id, &0, &holders, &report_id, &1);
-        assert!(t.client.accrued_credits(&bond_id, &holder) > 0);
+        assert!(t.client.escrowed_credits(&bond_id, &holder) > 0);
 
         t.client.begin_migration(&t.admin, &bond_id, &2);
         assert!(t.client.get_migration_window(&bond_id).is_some());
@@ -3370,7 +3427,7 @@ mod test {
                     prop_assert_eq!(t.client.get_period_count(&bond_id), 0);
                     prop_assert_eq!(t.client.get_undistributed_total(&bond_id), 0);
                     for h in &holders {
-                        prop_assert_eq!(t.client.accrued_credits(&bond_id, h), 0);
+                        prop_assert_eq!(t.client.escrowed_credits(&bond_id, h), 0);
                     }
                     return Ok(());
                 };
@@ -3382,7 +3439,7 @@ mod test {
                 let mut distributed = 0i128;
                 let mut credited = 0u32;
                 for h in &holders {
-                    let accrued = t.client.accrued_credits(&bond_id, h);
+                    let accrued = t.client.escrowed_credits(&bond_id, h);
                     prop_assert!(accrued >= 0);
                     distributed += accrued;
                     if accrued > 0 {
@@ -3404,10 +3461,10 @@ mod test {
                 // the pool over *subscribed* tokens, and unsubscribed supply
                 // does not dilute anyone.
                 for (h, &balance) in holders.iter().zip(balances.iter()) {
-                    let accrued = t.client.accrued_credits(&bond_id, h);
+                    let accrued = t.client.escrowed_credits(&bond_id, h);
                     prop_assert!(accrued <= pool * balance / total_subscribed);
-                    let by_type = t.client.accrued_credits_by_type(&bond_id, h, &CreditType::Carbon)
-                        + t.client.accrued_credits_by_type(&bond_id, h, &CreditType::Biodiversity);
+                    let by_type = t.client.escrowed_credits_by_type(&bond_id, h, &CreditType::Carbon)
+                        + t.client.escrowed_credits_by_type(&bond_id, h, &CreditType::Biodiversity);
                     prop_assert_eq!(by_type, accrued);
                 }
 
@@ -3415,8 +3472,8 @@ mod test {
                 // equal balances earn exactly the same.
                 for (i, &bi) in balances.iter().enumerate() {
                     for (j, &bj) in balances.iter().enumerate() {
-                        let ai = t.client.accrued_credits(&bond_id, &holders[i]);
-                        let aj = t.client.accrued_credits(&bond_id, &holders[j]);
+                        let ai = t.client.escrowed_credits(&bond_id, &holders[i]);
+                        let aj = t.client.escrowed_credits(&bond_id, &holders[j]);
                         if bi > bj {
                             prop_assert!(ai >= aj);
                         } else if bi == bj {
@@ -3431,8 +3488,8 @@ mod test {
                 let mut carbon_seen = 0i128;
                 let mut bio_seen = 0i128;
                 for h in &holders {
-                    carbon_seen += t.client.accrued_credits_by_type(&bond_id, h, &CreditType::Carbon);
-                    bio_seen += t.client.accrued_credits_by_type(&bond_id, h, &CreditType::Biodiversity);
+                    carbon_seen += t.client.escrowed_credits_by_type(&bond_id, h, &CreditType::Carbon);
+                    bio_seen += t.client.escrowed_credits_by_type(&bond_id, h, &CreditType::Biodiversity);
                 }
                 prop_assert!(carbon_seen <= carbon_pool);
                 prop_assert!(bio_seen <= bio_pool);
@@ -3562,7 +3619,7 @@ mod test {
                 for (holder, &balance) in holders.iter().zip(balances.iter()) {
                     let expected =
                         expected_credits(total_credits, total_subscribed, balance);
-                    prop_assert_eq!(t.client.accrued_credits(&bond_id, holder), expected);
+                    prop_assert_eq!(t.client.escrowed_credits(&bond_id, holder), expected);
                     if expected > 0 {
                         credited_holders += 1;
                     }
@@ -3643,7 +3700,7 @@ mod test {
                         );
                     }
                     sum_accrued += holder_accrued;
-                    prop_assert_eq!(t.client.accrued_credits(&bond_id, holder), holder_accrued);
+                    prop_assert_eq!(t.client.escrowed_credits(&bond_id, holder), holder_accrued);
                 }
                 prop_assert_eq!(
                     sum_accrued + sum_undistributed,
@@ -3749,10 +3806,10 @@ mod test {
                 // INV-2 + INV-4: per-holder cap and type-ledger consistency.
                 let mut sum_accrued = 0i128;
                 for (holder, &balance) in holders.iter().zip(balances.iter()) {
-                    let accrued = t.client.accrued_credits(&bond_id, holder);
+                    let accrued = t.client.escrowed_credits(&bond_id, holder);
                     let carbon_leg =
-                        t.client.accrued_credits_by_type(&bond_id, holder, &CreditType::Carbon);
-                    let bio_leg = t.client.accrued_credits_by_type(
+                        t.client.escrowed_credits_by_type(&bond_id, holder, &CreditType::Carbon);
+                    let bio_leg = t.client.escrowed_credits_by_type(
                         &bond_id,
                         holder,
                         &CreditType::Biodiversity,
