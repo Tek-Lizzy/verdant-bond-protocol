@@ -87,7 +87,7 @@ export type IoTSensorMetrics = z.infer<typeof IoTSensorMetricsSchema>;
 
 export const IoTSensorReadingSchema = z.object({
   device_id: z.string().min(1),
-  timestamp: z.string().refine((value) => !Number.isNaN(Date.parse(value)), {
+  timestamp: z.string().refine((value: any) => !Number.isNaN(Date.parse(value)), {
     message: 'expected an ISO-8601 timestamp',
   }),
   metrics: IoTSensorMetricsSchema,

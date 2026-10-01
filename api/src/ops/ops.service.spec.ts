@@ -64,7 +64,7 @@ describe('OpsService', () => {
   });
 
   it('aggregates unhealthy status and incidents correctly', async () => {
-    oracleIncidents.findMany.mockImplementation(async (page, limit, status) => {
+    oracleIncidents.findMany.mockImplementation(async (page: number, limit: number, status: string) => {
       if (status === 'active') {
         return {
           data: [

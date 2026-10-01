@@ -22,7 +22,7 @@ export interface RiskAssessment {
   };
   maintainerDetail: {
     visibility: 'maintainer';
-    signals: Record<string, number | boolean | string | undefined>;
+    signals: Record<string, number | boolean | string | null | undefined>;
     reason: string;
   };
 }

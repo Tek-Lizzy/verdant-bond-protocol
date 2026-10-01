@@ -32,6 +32,9 @@ mod integration {
             credit_vintage: 2024,
             serial_number_start: 1,
             serial_number_end: 10_000,
+            credit_vintage: 2024,
+            serial_number_start: 1,
+            serial_number_end: 10_000,
             face_value: 1000,
             coupon_schedule: soroban_sdk::vec![env, 1_000_000u64, 2_000_000u64],
             credit_type: CreditType::Carbon,
@@ -338,9 +341,12 @@ mod integration {
                 credit_type: CreditType::BlueCarbon,
                 maturity_date: 3_000_000,
                 total_supply: 10_000,
-            credit_vintage: 2024,
-            serial_number_start: 1,
-            serial_number_end: 10_000,
+                credit_vintage: 2024,
+                serial_number_start: 1,
+                serial_number_end: 10_000,
+                credit_vintage: 2024,
+                serial_number_start: 1,
+                serial_number_end: 10_000,
             };
             let bond_id = contracts.bi_client.issue_bond(&admin, &config, &0);
             assert_eq!(bond_id, 1);

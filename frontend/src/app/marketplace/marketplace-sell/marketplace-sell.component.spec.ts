@@ -1,4 +1,5 @@
 import { TestBed, ComponentFixture } from '@angular/core/testing';
+import { HttpErrorResponse } from '@angular/common/http';
 import { signal } from '@angular/core';
 import { provideRouter } from '@angular/router';
 import { Subject, of, throwError } from 'rxjs';
@@ -68,7 +69,7 @@ describe('MarketplaceSellComponent', () => {
   });
 
   it('shows a dismissible error when held bonds fail to load', () => {
-    apiService.getHeldBonds.and.returnValue(throwError(() => ({ status: 401, error: { message: 'Wallet required' } })));
+    apiService.getHeldBonds.and.returnValue(throwError(() => new HttpErrorResponse({ status: 401, error: { detail: 'Wallet required' } })));
     fixture = TestBed.createComponent(MarketplaceSellComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();

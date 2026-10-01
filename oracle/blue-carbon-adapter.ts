@@ -126,7 +126,7 @@ export async function aggregateBlueCarbonProject(
   }
 
   const inPeriod = parsed.surveys.filter(
-    (survey) => survey.survey_date >= periodStart && survey.survey_date <= periodEnd,
+    (survey: any) => survey.survey_date >= periodStart && survey.survey_date <= periodEnd,
   );
   if (inPeriod.length === 0) {
     throw new BlueCarbonNoSurveysError(
@@ -161,7 +161,7 @@ export async function aggregateBlueCarbonProject(
       baseline_carbon_t_per_ha: validatedProject.baseline_carbon_t_per_ha,
     },
     raw_observations: {
-      survey_ids: inPeriod.map((survey) => survey.survey_id),
+      survey_ids: inPeriod.map((survey: any) => survey.survey_id),
       survey_count: inPeriod.length,
     },
     transformation_parameters: {

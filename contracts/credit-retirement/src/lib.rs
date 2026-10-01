@@ -403,7 +403,10 @@ mod test {
             credit_vintage: 2024,
             serial_number_start: 1,
             serial_number_end: 10_000,
-            };
+            credit_vintage: 2024,
+            serial_number_start: 1,
+            serial_number_end: 10_000,
+        };
         let bond_id = issuer_client.issue_bond(&issuer_admin, &bond_config, &0);
         issuer_client.subscribe(&holder, &bond_id, &10_000, &0);
 
@@ -661,7 +664,10 @@ mod test {
             credit_vintage: 2024,
             serial_number_start: 1,
             serial_number_end: 10_000,
-            };
+            credit_vintage: 2024,
+            serial_number_start: 1,
+            serial_number_end: 10_000,
+        };
         let bond_id = issuer_client.issue_bond(&issuer_admin, &bond_config, &0);
         issuer_client.subscribe(&holder1, &bond_id, &3_000, &0);
         issuer_client.subscribe(&holder2, &bond_id, &7_000, &0);

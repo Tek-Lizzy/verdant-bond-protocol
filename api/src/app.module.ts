@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_INTERCEPTOR, APP_GUARD } from '@nestjs/core';
+import { ComplianceModule } from './compliance/compliance.module';
+import { WorkersModule } from './workers/workers.module';
 import { CommonModule } from './common/common.module';
 import { BondsModule } from './bonds/bonds.module';
 import { ProjectsModule } from './projects/projects.module';
@@ -33,28 +35,14 @@ import { OpsModule } from './ops/ops.module';
     SeedModule,
     ValuationModule,
     WorkersModule,
-    ReconciliationModule,
-    ExportsModule,
     ComplianceModule,
-    AuditModule,
-    RecoveryModule,
-    MigrationSafetyModule,
-    ImpersonationModule,
-    InvitationsModule,
-    FailuresModule,
-    NotificationsModule,
-    FeesModule,
-    AuthorizationsModule,
-    StatusModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: Rfc7807ExceptionFilter },
     { provide: APP_INTERCEPTOR, useClass: RequestLoggingInterceptor },
-    { provide: APP_INTERCEPTOR, useClass: TelemetryInterceptor },
     { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },
     { provide: APP_INTERCEPTOR, useClass: IdempotencyInterceptor },
     { provide: APP_GUARD, useClass: RateLimitGuard },
-    { provide: APP_GUARD, useClass: QuotaGuard },
   ],
 })
 export class AppModule {}

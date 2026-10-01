@@ -734,7 +734,6 @@ impl CouponEngine {
         })
     }
 
-    
     pub fn confirm_retirement(
         env: Env,
         caller: Address,
@@ -783,7 +782,59 @@ impl CouponEngine {
             return Err(BondError::Overflow);
         }
         env.storage().persistent().set(&key, &(current - amount));
-        
+
+        Ok(())
+    }
+
+    pub fn confirm_retirement(
+        env: Env,
+        caller: Address,
+        bond_id: u64,
+        holder: Address,
+        amount: i128,
+        nonce: u64,
+    ) -> Result<(), BondError> {
+        caller.require_auth();
+        let expected_nonce = get_nonce(&env, &caller);
+        if nonce != expected_nonce {
+            return Err(BondError::InvalidNonce);
+        }
+        set_nonce(&env, &caller, expected_nonce + 1);
+        require_admin(&env, &caller)?;
+
+        let key = DataKey::EscrowedCredits(bond_id, holder.clone());
+        let current: i128 = env.storage().persistent().get(&key).unwrap_or(0);
+        if amount > current {
+            return Err(BondError::Overflow);
+        }
+        env.storage().persistent().set(&key, &(current - amount));
+
+        Ok(())
+    }
+
+    pub fn revert_payout(
+        env: Env,
+        caller: Address,
+        bond_id: u64,
+        holder: Address,
+        amount: i128,
+        nonce: u64,
+    ) -> Result<(), BondError> {
+        caller.require_auth();
+        let expected_nonce = get_nonce(&env, &caller);
+        if nonce != expected_nonce {
+            return Err(BondError::InvalidNonce);
+        }
+        set_nonce(&env, &caller, expected_nonce + 1);
+        require_admin(&env, &caller)?;
+
+        let key = DataKey::EscrowedCredits(bond_id, holder.clone());
+        let current: i128 = env.storage().persistent().get(&key).unwrap_or(0);
+        if amount > current {
+            return Err(BondError::Overflow);
+        }
+        env.storage().persistent().set(&key, &(current - amount));
+
         Ok(())
     }
 
@@ -802,7 +853,11 @@ impl CouponEngine {
     ) -> i128 {
         env.storage()
             .persistent()
-            .get(&DataKey::EscrowedCreditsByType(bond_id, holder, credit_type))
+            .get(&DataKey::EscrowedCreditsByType(
+                bond_id,
+                holder,
+                credit_type,
+            ))
             .unwrap_or(0)
     }
 
@@ -1589,7 +1644,9 @@ mod test {
             credit_vintage: 2024,
             serial_number_start: 1,
             serial_number_end: 10_000,
-            
+            credit_vintage: 2024,
+            serial_number_start: 1,
+            serial_number_end: 10_000,
         }
     }
 

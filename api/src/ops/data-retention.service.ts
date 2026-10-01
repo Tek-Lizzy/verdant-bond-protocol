@@ -3,6 +3,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import * as fs from 'fs';
 import * as path from 'path';
 import { OracleIncidentRepository } from '../oracle/oracle-incident.repository';
+import { OracleIncidentStatus } from '../oracle/interfaces/oracle-incident.interface';
 
 export enum DataType {
   TELEMETRY = 'telemetry',
@@ -89,8 +90,8 @@ export class DataRetentionService {
 
     // For evidence, check if it relates to an active oracle incident
     try {
-      const activeIncidents = await this.oracleIncidents.findMany(1, 1000, 'active');
-      const acknowledgedIncidents = await this.oracleIncidents.findMany(1, 1000, 'acknowledged');
+      const activeIncidents = await this.oracleIncidents.findMany(1, 1000, OracleIncidentStatus.Active as any);
+      const acknowledgedIncidents = await this.oracleIncidents.findMany(1, 1000, OracleIncidentStatus.Acknowledged as any);
       const allActive = [...activeIncidents.data, ...acknowledgedIncidents.data];
       
       // Assume the filename might contain the IPFS hash or UUID related to the incident

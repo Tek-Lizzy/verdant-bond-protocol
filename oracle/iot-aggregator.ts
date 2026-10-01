@@ -163,7 +163,7 @@ export async function aggregateIotProject(
     throw error;
   }
 
-  const validReadings = parsed.readings.filter((reading) =>
+  const validReadings = parsed.readings.filter((reading: any) =>
     reading.metrics.soil_carbon_ppm !== null || reading.metrics.water_table_cm !== null,
   );
   if (validReadings.length === 0) {

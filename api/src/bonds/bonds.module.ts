@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ComplianceModule } from '../compliance/compliance.module';
 import { BondsController } from './bonds.controller';
 import { BondsService } from './bonds.service';
 import { BondReconciliationService } from './bond-reconciliation.service';
